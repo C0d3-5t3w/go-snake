@@ -1,0 +1,24 @@
+{
+  "high_scores": [
+    {
+      "player": "Player1",
+      "score": 100,
+      "date": "2023-04-15T20:00:00Z"
+    },
+    {
+      "player": "Player2",
+      "score": 80,
+      "date": "2023-04-14T18:30:00Z"
+    },
+    {
+      "player": "Player3",
+      "score": 60,
+      "date": "2023-04-13T19:15:00Z"
+    }
+  ],
+  "settings": {
+    "music_volume": 0.7,
+    "sfx_volume": 0.8,
+    "difficulty": "medium"
+  }
+}
