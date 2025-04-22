@@ -24,7 +24,6 @@ type Config struct {
 		WindowHeight int  `yaml:"window_height"`
 		Fullscreen   bool `yaml:"fullscreen"`
 		Vsync        bool `yaml:"vsync"`
-		MSAA         int  `yaml:"msaa"`
 	} `yaml:"graphics"`
 
 	Controls struct {
@@ -32,8 +31,6 @@ type Config struct {
 		Backward string `yaml:"backward"`
 		Left     string `yaml:"left"`
 		Right    string `yaml:"right"`
-		Up       string `yaml:"up"`
-		Down     string `yaml:"down"`
 		Pause    string `yaml:"pause"`
 		Quit     string `yaml:"quit"`
 	} `yaml:"controls"`

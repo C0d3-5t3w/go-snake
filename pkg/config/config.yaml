@@ -1,8 +1,8 @@
 game:
   grid_size: 20
-  initial_speed: 5
-  speed_increment: 0.5
-  max_speed: 15
+  initial_speed: 3
+  speed_increment: 0.3
+  max_speed: 12
   initial_length: 3
   
 graphics:
@@ -10,21 +10,18 @@ graphics:
   window_height: 600
   fullscreen: false
   vsync: true
-  msaa: 4
   
 controls:
-  forward: "w"
-  backward: "s"
-  left: "a"
-  right: "d"
-  up: "j"
-  down: "k"
-  pause: "h"
-  quit: "l"
+  forward: "arrowup"
+  backward: "arrowdown"
+  left: "arrowleft"
+  right: "arrowright"
+  pause: "p"
+  quit: "escape"
   
 colors:
-  snake_head: [0, 1, 0]
-  snake_body: [0, 0.8, 0]
-  food: [1, 0, 0]
-  grid: [0.5, 0.5, 0.5]
-  background: [0.1, 0.1, 0.2]
+  snake_head: [0.8, 0.3, 1.0]  # Purple
+  snake_body: [1.0, 0.5, 0.0]  # Orange
+  food: [1.0, 0.2, 0.0]        # Red-orange
+  grid: [0.2, 0.8, 0.2]        # Eerie green
+  background: [0.1, 0.0, 0.2]  # Dark purple

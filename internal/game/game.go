@@ -7,26 +7,24 @@ import (
 	"github.com/C0d3-5t3w/go-snake/internal/config"
 )
 
-// Direction represents movement direction in 3D space
+// Direction represents movement direction in 2D space
 type Direction int
 
 const (
-	Up Direction = iota
-	Down
-	Left
+	Left Direction = iota
 	Right
-	Forward
-	Backward
+	Up   // Renamed from Forward
+	Down // Renamed from Backward
 )
 
-// Point3D represents a position in 3D space
-type Point3D struct {
-	X, Y, Z int
+// Point2D represents a position in 2D space
+type Point2D struct {
+	X, Y int
 }
 
 // Snake represents the player's snake
 type Snake struct {
-	Body      []Point3D
+	Body      []Point2D
 	Direction Direction
 	GrowCount int
 }
@@ -44,7 +42,7 @@ const (
 type Game struct {
 	Config        *config.Config
 	Snake         Snake
-	Food          Point3D
+	Food          Point2D
 	Grid          int
 	Score         int
 	State         GameState
@@ -73,10 +71,10 @@ func (g *Game) Reset() {
 	// Create snake in the center of the grid
 	center := g.Grid / 2
 	g.Snake = Snake{
-		Body: []Point3D{
-			{X: center, Y: center, Z: center},
+		Body: []Point2D{
+			{X: center, Y: center},
 		},
-		Direction: Forward,
+		Direction: Right, // Start moving right
 	}
 
 	// Grow snake to initial length
@@ -101,16 +99,15 @@ func (g *Game) Reset() {
 func (g *Game) PlaceFood() {
 	for {
 		// Generate random position
-		food := Point3D{
+		food := Point2D{
 			X: rand.Intn(g.Grid),
 			Y: rand.Intn(g.Grid),
-			Z: rand.Intn(g.Grid),
 		}
 
 		// Check if position overlaps with snake
 		overlap := false
 		for _, part := range g.Snake.Body {
-			if part.X == food.X && part.Y == food.Y && part.Z == food.Z {
+			if part.X == food.X && part.Y == food.Y {
 				overlap = true
 				break
 			}
@@ -127,12 +124,10 @@ func (g *Game) PlaceFood() {
 func (g *Game) ChangeDirection(dir Direction) {
 	// Prevent 180-degree turns
 	opposites := map[Direction]Direction{
-		Up:       Down,
-		Down:     Up,
-		Left:     Right,
-		Right:    Left,
-		Forward:  Backward,
-		Backward: Forward,
+		Up:    Down,
+		Down:  Up,
+		Left:  Right,
+		Right: Left,
 	}
 
 	if opposites[dir] != g.Snake.Direction {
@@ -159,45 +154,40 @@ func (g *Game) Update() bool {
 	head := g.Snake.Body[0]
 
 	// Calculate new head position
-	newHead := Point3D{X: head.X, Y: head.Y, Z: head.Z}
+	newHead := Point2D{X: head.X, Y: head.Y}
 
 	// Move based on direction
 	switch g.Snake.Direction {
 	case Up:
-		newHead.Y++
+		newHead.Y-- // Ebiten Y is down, so decrement for Up
 	case Down:
-		newHead.Y--
+		newHead.Y++ // Ebiten Y is down, so increment for Down
 	case Left:
 		newHead.X--
 	case Right:
 		newHead.X++
-	case Forward:
-		newHead.Z++
-	case Backward:
-		newHead.Z--
 	}
 
 	// Check for wall collision
 	if newHead.X < 0 || newHead.X >= g.Grid ||
-		newHead.Y < 0 || newHead.Y >= g.Grid ||
-		newHead.Z < 0 || newHead.Z >= g.Grid {
+		newHead.Y < 0 || newHead.Y >= g.Grid {
 		g.State = GameOver
 		return true
 	}
 
 	// Check for self collision
 	for _, part := range g.Snake.Body {
-		if newHead.X == part.X && newHead.Y == part.Y && newHead.Z == part.Z {
+		if newHead.X == part.X && newHead.Y == part.Y {
 			g.State = GameOver
 			return true
 		}
 	}
 
 	// Check for food collision
-	ateFood := newHead.X == g.Food.X && newHead.Y == g.Food.Y && newHead.Z == g.Food.Z
+	ateFood := newHead.X == g.Food.X && newHead.Y == g.Food.Y
 
 	// Add new head to the snake
-	g.Snake.Body = append([]Point3D{newHead}, g.Snake.Body...)
+	g.Snake.Body = append([]Point2D{newHead}, g.Snake.Body...)
 
 	// If food was eaten or snake is still growing
 	if ateFood || g.Snake.GrowCount > 0 {

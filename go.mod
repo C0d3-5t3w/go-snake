@@ -3,13 +3,16 @@ module github.com/C0d3-5t3w/go-snake
 go 1.24.2
 
 require (
-	github.com/g3n/engine v0.2.0
+	github.com/hajimehoshi/ebiten/v2 v2.8.7
+	golang.org/x/image v0.20.0
 	gopkg.in/yaml.v3 v3.0.1
 )
 
 require (
-	github.com/go-gl/glfw/v3.3/glfw v0.0.0-20221017161538-93cebf72946b // indirect
-	github.com/golang/freetype v0.0.0-20170609003504-e2365dfdc4a0 // indirect
-	golang.org/x/image v0.0.0-20210607152325-775e3b0c77b9 // indirect
-	gopkg.in/yaml.v2 v2.4.0 // indirect
+	github.com/ebitengine/gomobile v0.0.0-20240911145611-4856209ac325 // indirect
+	github.com/ebitengine/hideconsole v1.0.0 // indirect
+	github.com/ebitengine/purego v0.8.0 // indirect
+	github.com/jezek/xgb v1.1.1 // indirect
+	golang.org/x/sync v0.8.0 // indirect
+	golang.org/x/sys v0.25.0 // indirect
 )

@@ -2,279 +2,225 @@ package gui
 
 import (
 	"fmt"
+	"image/color"
+	"log"
 	"time"
 
-	"github.com/g3n/engine/app"
-	"github.com/g3n/engine/camera"
-	"github.com/g3n/engine/core"
-	"github.com/g3n/engine/geometry"
-	"github.com/g3n/engine/graphic"
-	"github.com/g3n/engine/gui"
-	"github.com/g3n/engine/light"
-	"github.com/g3n/engine/material"
-	"github.com/g3n/engine/math32"
-	"github.com/g3n/engine/renderer"
-	"github.com/g3n/engine/util/helper"
-	"github.com/g3n/engine/window"
+	"github.com/hajimehoshi/ebiten/v2"
+	"github.com/hajimehoshi/ebiten/v2/ebitenutil"
+	"github.com/hajimehoshi/ebiten/v2/inpututil"
+	"github.com/hajimehoshi/ebiten/v2/vector"
+	"golang.org/x/image/font"
+	"golang.org/x/image/font/basicfont"
 
 	"github.com/C0d3-5t3w/go-snake/internal/config"
 	"github.com/C0d3-5t3w/go-snake/internal/game"
 	"github.com/C0d3-5t3w/go-snake/internal/storage"
 )
 
-// GUI represents the graphical user interface
-type GUI struct {
-	app          *app.Application
-	scene        *core.Node
-	camera       *camera.Camera
-	game         *game.Game
-	config       *config.Config
-	storage      *storage.Storage
-	snakeMeshes  map[int]*graphic.Mesh
-	foodMesh     *graphic.Mesh
-	scoreLabel   *gui.Label
-	statusLabel  *gui.Label
-	orbitControl *camera.OrbitControl
-	cameraTarget *core.Node
-	gridHelpers  []*helper.Axes
+const (
+	tileSize = 20 // Size of each grid tile in pixels
+)
+
+// EbitenGame holds the game state for Ebitengine
+type EbitenGame struct {
+	game      *game.Game
+	config    *config.Config
+	storage   *storage.Storage
+	tileSize  int
+	infoFont  font.Face
+	lastFrame time.Time
+
+	// Cached images for performance
+	snakeHeadImg *ebiten.Image
+	snakeBodyImg *ebiten.Image
+	foodImg      *ebiten.Image
+	bgImg        *ebiten.Image
+	gridImg      *ebiten.Image // Optional grid image
 }
 
-// NewGUI creates a new GUI instance
-func NewGUI(g *game.Game, cfg *config.Config, s *storage.Storage) (*GUI, error) {
-	// Create application
-	a := app.App()
+// NewEbitenGUI initializes the Ebiten game wrapper
+func NewEbitenGUI(g *game.Game, cfg *config.Config, s *storage.Storage) (*EbitenGame, error) {
+	// Basic font for drawing text
+	infoFont := basicfont.Face7x13
 
-	// Set application options
-	a.IWindow.(*window.GlfwWindow).SetSize(cfg.Graphics.WindowWidth, cfg.Graphics.WindowHeight)
+	eg := &EbitenGame{
+		game:     g,
+		config:   cfg,
+		storage:  s,
+		tileSize: tileSize,
+		infoFont: infoFont,
+	}
+
+	// Initialize Ebiten window settings
+	ebiten.SetWindowSize(cfg.Graphics.WindowWidth, cfg.Graphics.WindowHeight)
+	ebiten.SetWindowTitle("Go Snake 2D")
+	ebiten.SetVsyncEnabled(cfg.Graphics.Vsync)
 	if cfg.Graphics.Fullscreen {
-		a.IWindow.(*window.GlfwWindow).SetFullscreen(true)
+		ebiten.SetFullscreen(true)
 	}
 
-	// Create scene
-	scene := core.NewNode()
+	// Pre-render images for drawing elements
+	eg.createImages()
 
-	// Create camera
-	cam := camera.New(1)
-	cam.SetPosition(0, 15, -20)
-	scene.Add(cam)
-
-	// Create camera target (for orbit control)
-	target := core.NewNode()
-	scene.Add(target)
-
-	// Create orbit control
-	orbitControl := camera.NewOrbitControl(cam)
-
-	// Create GUI
-	gui.Manager().Set(scene)
-
-	// Create score label
-	scoreLabel := gui.NewLabel("Score: 0")
-	scoreLabel.SetPosition(10, 10)
-	scoreLabel.SetColor(math32.NewColor("white"))
-	scoreLabel.SetFontSize(20)
-
-	// Create status label
-	statusLabel := gui.NewLabel("Game Paused - Press P to Start")
-	statusLabel.SetPosition(float32(cfg.Graphics.WindowWidth/2-100), 10)
-	statusLabel.SetColor(math32.NewColor("white"))
-	statusLabel.SetFontSize(20)
-
-	// Create and add lights
-	ambientLight := light.NewAmbient(&math32.Color{R: 0.4, G: 0.4, B: 0.4}, 1.0)
-	scene.Add(ambientLight)
-
-	pointLight := light.NewPoint(&math32.Color{R: 1, G: 1, B: 1}, 5.0)
-	pointLight.SetPosition(float32(g.Grid)*1.5, float32(g.Grid)*2, float32(g.Grid)*1.5)
-	scene.Add(pointLight)
-
-	dirLight := light.NewDirectional(&math32.Color{R: 1, G: 1, B: 1}, 1.0)
-	dirLight.SetPosition(float32(g.Grid), float32(g.Grid), float32(g.Grid))
-	scene.Add(dirLight)
-
-	// Create grid helpers
-	gridHelpers := make([]*helper.Axes, 0)
-	for i := 0; i < g.Grid+1; i++ {
-		for j := 0; j < g.Grid+1; j++ {
-			axesHelper := helper.NewAxes(0.1)
-			axesHelper.SetPosition(float32(i), 0, float32(j))
-			scene.Add(axesHelper)
-			gridHelpers = append(gridHelpers, axesHelper)
-		}
-	}
-
-	gui := &GUI{
-		app:          a,
-		scene:        scene,
-		camera:       cam,
-		game:         g,
-		config:       cfg,
-		storage:      s,
-		snakeMeshes:  make(map[int]*graphic.Mesh),
-		scoreLabel:   scoreLabel,
-		statusLabel:  statusLabel,
-		orbitControl: orbitControl,
-		cameraTarget: target,
-		gridHelpers:  gridHelpers,
-	}
-
-	// Create food mesh
-	gui.createFoodMesh()
-
-	// Set game callback for score changes
+	// Set game callbacks (if needed, e.g., score updates)
 	g.OnScoreChange = func(score int) {
-		scoreLabel.SetText(fmt.Sprintf("Score: %d", score))
+		// Score is drawn directly in the Draw method, no need for label update
 	}
 
-	return gui, nil
+	return eg, nil
 }
 
-// createFoodMesh creates the 3D mesh for food
-func (g *GUI) createFoodMesh() {
-	// Create sphere for food
-	geom := geometry.NewSphere(0.4, 16, 16)
-	mat := material.NewStandard(&math32.Color{
-		R: g.config.Colors.Food[0],
-		G: g.config.Colors.Food[1],
-		B: g.config.Colors.Food[2],
-	})
-
-	// Add glow effect
-	mat.SetOpacity(0.9)
-	mat.SetEmissiveColor(&math32.Color{R: 0.5, G: 0, B: 0})
-	mat.SetSpecularColor(&math32.Color{R: 1, G: 0.3, B: 0.3})
-	mat.SetShininess(50)
-
-	mesh := graphic.NewMesh(geom, mat)
-
-	// Position at food location
-	mesh.SetPosition(
-		float32(g.game.Food.X),
-		float32(g.game.Food.Y),
-		float32(g.game.Food.Z),
-	)
-
-	g.scene.Add(mesh)
-	g.foodMesh = mesh
+// Run starts the Ebitengine game loop
+func (eg *EbitenGame) Run() error {
+	return ebiten.RunGame(eg)
 }
 
-// updateFoodPosition updates the position of the food mesh
-func (g *GUI) updateFoodPosition() {
-	if g.foodMesh != nil {
-		g.scene.Remove(g.foodMesh)
-	}
-	g.createFoodMesh()
+// createImages pre-renders simple images for snake, food, etc.
+func (eg *EbitenGame) createImages() {
+	s := eg.tileSize
+
+	// Snake Head (using config color)
+	hc := eg.config.Colors.SnakeHead
+	eg.snakeHeadImg = ebiten.NewImage(s, s)
+	vector.DrawFilledRect(eg.snakeHeadImg, 0, 0, float32(s), float32(s), color.RGBA{R: uint8(hc[0] * 255), G: uint8(hc[1] * 255), B: uint8(hc[2] * 255), A: 255}, false)
+
+	// Snake Body (using config color)
+	bc := eg.config.Colors.SnakeBody
+	eg.snakeBodyImg = ebiten.NewImage(s, s)
+	vector.DrawFilledRect(eg.snakeBodyImg, 0, 0, float32(s), float32(s), color.RGBA{R: uint8(bc[0] * 255), G: uint8(bc[1] * 255), B: uint8(bc[2] * 255), A: 255}, false)
+
+	// Food (using config color)
+	fc := eg.config.Colors.Food
+	eg.foodImg = ebiten.NewImage(s, s)
+	vector.DrawFilledRect(eg.foodImg, 0, 0, float32(s), float32(s), color.RGBA{R: uint8(fc[0] * 255), G: uint8(fc[1] * 255), B: uint8(fc[2] * 255), A: 255}, false)
+
+	// Background (using config color)
+	bgc := eg.config.Colors.Background
+	eg.bgImg = ebiten.NewImage(1, 1) // Create a 1x1 pixel image for the background color
+	eg.bgImg.Fill(color.RGBA{R: uint8(bgc[0] * 255), G: uint8(bgc[1] * 255), B: uint8(bgc[2] * 255), A: 255})
+
+	// Grid (optional, draw lines)
+	// We can draw the grid dynamically in the Draw function instead for simplicity
 }
 
-// updateSnakeMeshes updates the snake's meshes
-func (g *GUI) updateSnakeMeshes() {
-	// Clear old meshes
-	for _, mesh := range g.snakeMeshes {
-		g.scene.Remove(mesh)
-	}
-	g.snakeMeshes = make(map[int]*graphic.Mesh)
+// Update proceeds the game state.
+func (eg *EbitenGame) Update() error {
+	// Handle input
+	eg.handleInput()
 
-	// Create new meshes for each snake segment
-	for i, part := range g.game.Snake.Body {
-		var geom geometry.IGeometry
-		var mat material.IMaterial
+	// Update game logic
+	// Note: Ebiten's Update function is called 60 times per second by default.
+	// The internal game Update() has its own speed control based on LastUpdate.
+	// This is fine, the game logic will only advance when its internal timer allows.
+	eg.game.Update()
 
-		if i == 0 {
-			// Head is a slightly larger cube with eyes
-			geom = geometry.NewBox(0.9, 0.9, 0.9)
-			mat = material.NewStandard(&math32.Color{
-				R: g.config.Colors.SnakeHead[0],
-				G: g.config.Colors.SnakeHead[1],
-				B: g.config.Colors.SnakeHead[2],
-			})
-			mat.(*material.Standard).SetSpecularColor(&math32.Color{R: 0.5, G: 1, B: 0.5})
-			mat.(*material.Standard).SetShininess(30)
-		} else {
-			// Body is a regular cube
-			geom = geometry.NewBox(0.8, 0.8, 0.8)
-			mat = material.NewStandard(&math32.Color{
-				R: g.config.Colors.SnakeBody[0],
-				G: g.config.Colors.SnakeBody[1],
-				B: g.config.Colors.SnakeBody[2],
-			})
-		}
-
-		mesh := graphic.NewMesh(geom, mat)
-		mesh.SetPosition(
-			float32(part.X),
-			float32(part.Y),
-			float32(part.Z),
-		)
-
-		g.scene.Add(mesh)
-		g.snakeMeshes[i] = mesh
-	}
+	return nil
 }
 
-// Run starts the GUI main loop
-func (g *GUI) Run() {
-	// Handle key events
-	g.app.Subscribe(window.OnKeyDown, g.onKeyDown)
-
-	// Combine update and render in the Run callback
-	g.app.Run(func(rend *renderer.Renderer, deltaTime time.Duration) {
-		g.game.Update()
-		g.updateSnakeMeshes()
-		g.updateFoodPosition()
-
-		// Update status label text
-		switch g.game.State {
-		case game.Playing:
-			g.statusLabel.SetText("Playing")
-		case game.Paused:
-			g.statusLabel.SetText("Game Paused - Press P to Start")
-		case game.GameOver:
-			g.statusLabel.SetText(fmt.Sprintf("Game Over - Score: %d - Press R to Restart", g.game.Score))
-			g.storage.AddHighScore("Player", g.game.Score)
-			g.storage.Save()
-		}
-
-		// Camera follow
-		head := g.game.Snake.Body[0]
-		targetPos := math32.NewVector3(float32(head.X), float32(head.Y), float32(head.Z))
-		g.orbitControl.SetTarget(*targetPos)
-
-		// Render scene (background/clear handled internally)
-		rend.Render(g.scene, g.camera)
-	})
-}
-
-// onKeyDown handles key press events
-func (g *GUI) onKeyDown(evname string, ev interface{}) {
-	kev := ev.(*window.KeyEvent)
-
+// handleInput processes user input
+func (eg *EbitenGame) handleInput() {
 	// Game controls
-	switch kev.Key {
-	case window.KeyP:
-		g.game.TogglePause()
-	case window.KeyR:
-		if g.game.IsGameOver() {
-			g.game.Reset()
+	if inpututil.IsKeyJustPressed(ebiten.KeyP) {
+		eg.game.TogglePause()
+	}
+	if inpututil.IsKeyJustPressed(ebiten.KeyR) {
+		if eg.game.IsGameOver() {
+			eg.game.Reset()
 		}
-	case window.KeyEscape:
-		g.app.Exit()
+	}
+	if inpututil.IsKeyJustPressed(ebiten.KeyEscape) {
+		// Note: Ebiten handles closing the window, maybe map this to pause or menu?
+		log.Println("Escape pressed - exiting game (Ebiten handles window close)")
+		// Or, implement a quit confirm dialog later
 	}
 
-	// Movement controls
-	if g.game.State == game.Playing {
-		switch {
-		case kev.Key == window.KeyW:
-			g.game.ChangeDirection(game.Forward)
-		case kev.Key == window.KeyS:
-			g.game.ChangeDirection(game.Backward)
-		case kev.Key == window.KeyA:
-			g.game.ChangeDirection(game.Left)
-		case kev.Key == window.KeyD:
-			g.game.ChangeDirection(game.Right)
-		case kev.Key == window.KeySpace:
-			g.game.ChangeDirection(game.Up)
-		case kev.Key == window.KeyLeftShift:
-			g.game.ChangeDirection(game.Down)
+	// Movement controls - only process if playing
+	if eg.game.State == game.Playing {
+		// Map W to Up (Y-)
+		if inpututil.IsKeyJustPressed(ebiten.KeyArrowUp) {
+			eg.game.ChangeDirection(game.Up)
+		}
+		// Map S to Down (Y+)
+		if inpututil.IsKeyJustPressed(ebiten.KeyArrowDown) {
+			eg.game.ChangeDirection(game.Down)
+		}
+		// Map A to Left (X-)
+		if inpututil.IsKeyJustPressed(ebiten.KeyArrowLeft) {
+			eg.game.ChangeDirection(game.Left)
+		}
+		// Map D to Right (X+)
+		if inpututil.IsKeyJustPressed(ebiten.KeyArrowRight) {
+			eg.game.ChangeDirection(game.Right)
 		}
 	}
+}
+
+// Draw draws the game screen.
+func (eg *EbitenGame) Draw(screen *ebiten.Image) {
+	// Draw background
+	screenW, screenH := screen.Size()
+	bgOpts := &ebiten.DrawImageOptions{}
+	bgOpts.GeoM.Scale(float64(screenW), float64(screenH)) // Scale the 1x1 pixel bg image
+	screen.DrawImage(eg.bgImg, bgOpts)
+
+	// Calculate offsets to center the grid
+	gridWidth := eg.game.Grid * eg.tileSize
+	gridHeight := eg.game.Grid * eg.tileSize
+	offsetX := (screenW - gridWidth) / 2
+	offsetY := (screenH - gridHeight) / 2
+
+	// Draw grid lines (optional, can be resource intensive)
+	gridC := eg.config.Colors.Grid
+	gridColor := color.RGBA{R: uint8(gridC[0] * 255), G: uint8(gridC[1] * 255), B: uint8(gridC[2] * 255), A: 100} // Semi-transparent grid
+	for i := 0; i <= eg.game.Grid; i++ {
+		fx := float32(offsetX + i*eg.tileSize)
+		fy := float32(offsetY + i*eg.tileSize)
+		// Vertical line
+		vector.StrokeLine(screen, fx, float32(offsetY), fx, float32(offsetY+gridHeight), 1, gridColor, false)
+		// Horizontal line
+		vector.StrokeLine(screen, float32(offsetX), fy, float32(offsetX+gridWidth), fy, 1, gridColor, false)
+	}
+
+	// Draw snake
+	for i, part := range eg.game.Snake.Body {
+		opts := &ebiten.DrawImageOptions{}
+		opts.GeoM.Translate(float64(offsetX+part.X*eg.tileSize), float64(offsetY+part.Y*eg.tileSize))
+		if i == 0 {
+			screen.DrawImage(eg.snakeHeadImg, opts)
+		} else {
+			screen.DrawImage(eg.snakeBodyImg, opts)
+		}
+	}
+
+	// Draw food
+	foodOpts := &ebiten.DrawImageOptions{}
+	foodOpts.GeoM.Translate(float64(offsetX+eg.game.Food.X*eg.tileSize), float64(offsetY+eg.game.Food.Y*eg.tileSize))
+	screen.DrawImage(eg.foodImg, foodOpts)
+
+	// Draw score and status
+	scoreText := fmt.Sprintf("Score: %d", eg.game.Score)
+	statusText := ""
+	switch eg.game.State {
+	case game.Playing:
+		statusText = "Playing - WASD: Move"
+	case game.Paused:
+		statusText = "Paused - Press P to Start"
+	case game.GameOver:
+		statusText = fmt.Sprintf("Game Over - Score: %d - Press R", eg.game.Score)
+	}
+
+	// Draw text using ebitenutil for simplicity
+	ebitenutil.DebugPrintAt(screen, scoreText, 10, 10)
+	ebitenutil.DebugPrintAt(screen, statusText, 10, 30)
+
+	// Draw FPS counter
+	fps := ebiten.ActualFPS()
+	ebitenutil.DebugPrintAt(screen, fmt.Sprintf("FPS: %.1f", fps), screenW-100, 10)
+}
+
+// Layout takes the outside size (e.g., window size) and returns the (logical) screen size.
+func (eg *EbitenGame) Layout(outsideWidth, outsideHeight int) (screenWidth, screenHeight int) {
+	// Use the configured window size as the logical size
+	return eg.config.Graphics.WindowWidth, eg.config.Graphics.WindowHeight
 }

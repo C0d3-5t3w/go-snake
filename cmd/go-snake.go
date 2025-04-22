@@ -25,12 +25,14 @@ func main() {
 	// Create game instance
 	gameInstance := game.NewGame(cfg)
 
-	// Create GUI
-	guiInstance, err := gui.NewGUI(gameInstance, cfg, store)
+	// Create Ebiten GUI wrapper
+	ebitenGUI, err := gui.NewEbitenGUI(gameInstance, cfg, store)
 	if err != nil {
-		log.Fatalf("Failed to initialize GUI: %v", err)
+		log.Fatalf("Failed to initialize Ebiten GUI: %v", err)
 	}
 
-	// Run the game
-	guiInstance.Run()
+	// Run the game using Ebiten's RunGame function
+	if err := ebitenGUI.Run(); err != nil {
+		log.Fatalf("Ebiten RunGame error: %v", err)
+	}
 }
